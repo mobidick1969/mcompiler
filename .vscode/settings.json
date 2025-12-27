@@ -8,9 +8,6 @@
             "tidy": true, // go.mod 파일 작업 시 tidy 버튼 표시
             "generate": true
         },
-        "formatting.gofmtConfig": {
-            "rewrite": "all" // 가능한 모든 곳에 최신 Go 스타일 적용
-        }
     },
     "[go]": {
         "editor.formatOnSave": true,
