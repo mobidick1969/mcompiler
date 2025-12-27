@@ -7,8 +7,6 @@ type Token struct {
 	Literal string
 }
 
-
-
 const (
 	ILLEGAL = "ILLEGAL"
 	EOF     = "EOF"
@@ -16,16 +14,18 @@ const (
 	IDENT = "IDENT"
 	INT   = "INT"
 
-	COMMA     = ","
-	SEMICOLON = ";"
-	ASSIGN    = "="
+	COMMA     = "," //
+	SEMICOLON = ";" //
 
-	LPAREN = "("
-	RPAREN = ")"
-	LBRACE = "{"
-	RBRACE = "}"
+	ASSIGN = "=" //
+	PLUS   = "+" //
+	MINUS  = "-" //
+
+	LPAREN = "(" //
+	RPAREN = ")" //
+	LBRACE = "{" //
+	RBRACE = "}" //
 
 	FUNCTION = "FUNCTION"
 	LET      = "LET"
 )
-
