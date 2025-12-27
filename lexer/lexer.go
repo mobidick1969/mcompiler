@@ -27,6 +27,13 @@ func (l *Lexer) readChar() {
 	l.readPosition += 1
 }
 
+func (l *Lexer) peekChar() byte {
+	if l.readPosition >= len(l.input) {
+		return 0
+	}
+	return l.input[l.readPosition]
+}
+
 func (l *Lexer) readIdentifier() string {
 	currentPos := l.position
 	for isLetter(l.ch) {
@@ -48,7 +55,12 @@ func (l *Lexer) NextToken() token.Token {
 	l.skipWhitespace()
 	switch l.ch {
 	case '=':
-		tok = newToken(token.ASSIGN, l.ch)
+		if l.peekChar() == '=' {
+			tok = token.Token{Type: token.EQUAL, Literal: "=="}
+			l.readChar()
+		} else {
+			tok = newToken(token.ASSIGN, l.ch)
+		}
 	case ',':
 		tok = newToken(token.COMMA, l.ch)
 	case ';':
@@ -65,6 +77,21 @@ func (l *Lexer) NextToken() token.Token {
 		tok = newToken(token.PLUS, l.ch)
 	case '-':
 		tok = newToken(token.MINUS, l.ch)
+	case '!':
+		if l.peekChar() == '=' {
+			tok = token.Token{Type: token.NOTEQUAL, Literal: "!="}
+			l.readChar()
+		} else {
+			tok = newToken(token.BANG, l.ch)
+		}
+	case '*':
+		tok = newToken(token.ASTERISK, l.ch)
+	case '/':
+		tok = newToken(token.SLASH, l.ch)
+	case '<':
+		tok = newToken(token.LT, l.ch)
+	case '>':
+		tok = newToken(token.GT, l.ch)
 	case 0:
 		tok.Literal = ""
 		tok.Type = token.EOF
@@ -90,8 +117,13 @@ func isDigit(b byte) bool {
 }
 
 var keywords = map[string]token.TokenType{
-	"let": token.LET,
-	"fn":  token.FUNCTION,
+	"let":    token.LET,
+	"fn":     token.FUNCTION,
+	"if":     token.IF,
+	"else":   token.ELSE,
+	"return": token.RETURN,
+	"true":   token.TRUE,
+	"false":  token.FALSE,
 }
 
 func (l *Lexer) lookupIdent(literal string) token.TokenType {

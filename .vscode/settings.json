@@ -1,0 +1,22 @@
+{
+    "go.useLanguageServer": true,
+    "gopls": {
+        "ui.semanticTokens": true, // 더 정밀한 구문 강조
+        "ui.completion.usePlaceholders": true, // 함수 완성 시 매개변수 플레이스홀더 표시
+        "ui.codelenses": {
+            "test": true, // 테스트 함수 위에 [Run Test] 버튼 표시
+            "tidy": true, // go.mod 파일 작업 시 tidy 버튼 표시
+            "generate": true
+        },
+        "formatting.gofmtConfig": {
+            "rewrite": "all" // 가능한 모든 곳에 최신 Go 스타일 적용
+        }
+    },
+    "[go]": {
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": true
+        },
+        "editor.defaultFormatter": "golang.go"
+    }
+}
