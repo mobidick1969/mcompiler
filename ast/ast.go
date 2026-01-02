@@ -2,6 +2,7 @@ package ast
 
 import (
 	"bytes"
+	"fmt"
 	"mcompiler/token"
 )
 
@@ -51,7 +52,10 @@ func (es *ExpressionStatement) TokenLiteral() string {
 }
 
 func (es *ExpressionStatement) String() string {
-	return es.Expression.String()
+	var out bytes.Buffer
+	out.WriteString(es.Expression.String())
+	out.WriteString(";")
+	return out.String()
 }
 
 type LetStatement struct {
@@ -108,7 +112,7 @@ func (i *Identifier) String() string { return i.Value }
 
 type IntegerLiteral struct {
 	Token token.Token
-	Value string
+	Value int64
 }
 
 func (il *IntegerLiteral) expressionNode() {}
@@ -116,7 +120,7 @@ func (il *IntegerLiteral) expressionNode() {}
 func (il *IntegerLiteral) TokenLiteral() string {
 	return il.Token.Literal
 }
-func (il *IntegerLiteral) String() string { return il.Value }
+func (il *IntegerLiteral) String() string { return fmt.Sprintf("%d", il.Value) }
 
 type ReturnStatement struct {
 	Token token.Token
@@ -182,7 +186,6 @@ func (be *BinaryExpression) String() string {
 	return out.String()
 }
 
-
 type BlockStatement struct {
 	Token      token.Token
 	Statements []Statement
@@ -199,5 +202,75 @@ func (bs *BlockStatement) String() string {
 		out.WriteString(stmt.String())
 	}
 	out.WriteString("}")
+	return out.String()
+}
+
+type IfStatement struct {
+	Token       token.Token
+	Condition   Expression
+	Consequence Statement
+	Alternative Statement
+}
+
+func (is *IfStatement) statementNode() {}
+func (is *IfStatement) TokenLiteral() string {
+	return is.Token.Literal
+}
+func (is *IfStatement) String() string {
+	var out bytes.Buffer
+	out.WriteString(is.TokenLiteral() + " ")
+	out.WriteString(is.Condition.String())
+	out.WriteString(" ")
+	out.WriteString(is.Consequence.String())
+	if is.Alternative != nil {
+		out.WriteString(" ")
+		out.WriteString(is.Alternative.String())
+	}
+	return out.String()
+}
+
+type FunctionInvokeExpression struct {
+	Token     token.Token
+	Arguments []Expression
+}
+
+func (fie *FunctionInvokeExpression) expressionNode() {}
+func (fie *FunctionInvokeExpression) TokenLiteral() string {
+	return fie.Token.Literal
+}
+func (fie *FunctionInvokeExpression) String() string {
+	var out bytes.Buffer
+	out.WriteString(fie.TokenLiteral() + "(")
+	for i, arg := range fie.Arguments {
+		out.WriteString(arg.String())
+		if i < len(fie.Arguments)-1 {
+			out.WriteString(", ")
+		}
+	}
+	out.WriteString(")")
+	return out.String()
+}
+
+type FunctionExpression struct {
+	Token      token.Token
+	Parameters []Identifier
+	Body       Statement
+}
+
+func (fs *FunctionExpression) expressionNode() {}
+func (fs *FunctionExpression) TokenLiteral() string {
+	return fs.Token.Literal
+}
+func (fs *FunctionExpression) String() string {
+	var out bytes.Buffer
+	out.WriteString(fs.TokenLiteral() + "(")
+	for i, param := range fs.Parameters {
+		out.WriteString(param.String())
+		if i < len(fs.Parameters)-1 {
+			out.WriteString(", ")
+		}
+	}
+	out.WriteString(")")
+	out.WriteString(fs.Body.String())
 	return out.String()
 }
