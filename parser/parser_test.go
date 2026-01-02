@@ -202,7 +202,7 @@ func TestParser_ParseIfStatement(t *testing.T) {
 }
 
 func TestParser_ParseBlockStatement(t *testing.T) {
-	input := `{ let x = 5; let y = 10; }`
+	input := `{ let x = 5; let y = 10; let f = fn(x, y) { x + y; }; let y=f(a,10);`
 
 	l := lexer.New(input)
 	p := New(l)
@@ -223,12 +223,12 @@ func TestParser_ParseBlockStatement(t *testing.T) {
 			program.Statements[0])
 	}
 
-	if len(stmt.Statements) != 2 {
-		t.Fatalf("block statement does not contain 2 statements. got=%d",
+	if len(stmt.Statements) != 4 {
+		t.Fatalf("block statement does not contain 4 statements. got=%d",
 			len(stmt.Statements))
 	}
 
-	expectedString := "{let x = 5;let y = 10;}"
+	expectedString := "{let x = 5;let y = 10;let f = fn(x, y){(x + y);};let y = f(a, 10);}"
 	if stmt.String() != expectedString {
 		t.Errorf("stmt.String() wrong. expected=%q, got=%q", expectedString, stmt.String())
 	}
