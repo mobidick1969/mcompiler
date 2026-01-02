@@ -8,11 +8,18 @@ import (
 )
 
 type Parser struct {
-	l         *lexer.Lexer
-	curToken  token.Token
-	peekToken token.Token
-	errors    []string
+	l              *lexer.Lexer
+	curToken       token.Token
+	peekToken      token.Token
+	errors         []string
+	prefixParseFns map[token.TokenType]prefixParseFn
+	infixParseFns  map[token.TokenType]infixParseFn
 }
+
+type (
+	prefixParseFn func() ast.Expression
+	infixParseFn  func(ast.Expression) ast.Expression
+)
 
 func New(l *lexer.Lexer) *Parser {
 	p := &Parser{
@@ -57,8 +64,19 @@ func (p *Parser) parseStatement() ast.Statement {
 	case token.RETURN:
 		return p.parseReturnStatement()
 	default:
-		return nil
+		return p.parseExpressionStatement()
 	}
+}
+
+func (p *Parser) parseExpressionStatement() ast.Statement {
+	stmt := &ast.ExpressionStatement{Token: p.curToken}
+	stmt.Expression = p.parseExpression(LOWEST)
+
+	if p.peekTokenIs(token.SEMICOLON) {
+		p.nextToken()
+	}
+
+	return stmt
 }
 
 func (p *Parser) parseLetStatement() ast.Statement {
@@ -73,8 +91,13 @@ func (p *Parser) parseLetStatement() ast.Statement {
 	if !p.expectPeek(token.ASSIGN) {
 		return nil
 	}
+	p.nextToken()
 
-	stmt.Value = p.parseExpression(token.ILLEGAL)
+	stmt.Value = p.parseExpression(LOWEST)
+
+	if p.peekTokenIs(token.SEMICOLON) {
+		p.nextToken()
+	}
 
 	return stmt
 }
@@ -83,57 +106,92 @@ func (p *Parser) parseReturnStatement() ast.Statement {
 	stmt := &ast.ReturnStatement{Token: p.curToken}
 	p.nextToken() //advance token for skipping return token
 
-	stmt.Value = p.parseExpression(token.ILLEGAL)
+	stmt.Value = p.parseExpression(LOWEST)
+
+	if p.peekTokenIs(token.SEMICOLON) {
+		p.nextToken()
+	}
 
 	return stmt
 }
 
-func (p *Parser) parseExpression(op token.TokenType) ast.Expression {
+func (p *Parser) registerPrefix(tokenType token.TokenType, fn prefixParseFn) {
+	p.prefixParseFns[tokenType] = fn
+}
+
+func (p *Parser) registerInfix(tokenType token.TokenType, fn infixParseFn) {
+	p.infixParseFns[tokenType] = fn
+}
+
+func (p *Parser) parseExpression(precedence Precedence) ast.Expression {
 	var left ast.Expression
 
 	if p.curTokenIs(token.LPAREN) {
 		p.nextToken()
-		left = p.parseExpression(token.ILLEGAL)
-		fmt.Printf("left:%+v, op:%+v, curToken:%+v\n", left, op, p.curToken)
+		left = p.parseExpression(LOWEST)
 		if !p.expectPeek(token.RPAREN) {
-			fmt.Printf("left:%+v, op:%+v, curToken:%+v\n", left, op, p.curToken)
-			p.peekError(token.RPAREN)
 			return nil
 		}
-		fmt.Printf("left:%+v, op:%+v, curToken:%+v\n", left, op, p.curToken)
 	} else if p.curTokenIs(token.IDENT) {
 		left = &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
 	} else if p.curTokenIs(token.INT) {
 		left = &ast.IntegerLiteral{Token: p.curToken, Value: p.curToken.Literal}
-	} 
-
-	for (getPrecedence(op) < getPrecedence(p.peekToken.Type)) && !p.peekTokenIs(token.RPAREN) {
-		p.nextToken()
-		fmt.Printf("left:%+v, op:%+v, curToken:%+v\n", left, op, p.curToken)
-
+	} else if p.curTokenIs(token.MINUS) {
 		tok := p.curToken
 		p.nextToken()
+		exp := p.parseExpression(HIGHEST)
+		left = &ast.UnaryExpression{Token: tok, Right: exp}
+	} else {
+		p.errors = append(p.errors, fmt.Sprintf("expected next token to be Prefix, got %s instead", p.curToken.Type))
+		return nil
+	}
 
-		left = &ast.BinaryExpression{
-			Token: tok,
-			Left:  left,
-			Right: p.parseExpression(tok.Type),
-		}
+	for precedence < p.peekPrecedence() {
+		p.nextToken()
+		left = p.parseBinaryExpression(left)
 	}
 
 	return left
 }
 
-func getPrecedence(tokenType token.TokenType) int {
+func (p *Parser) parseBinaryExpression(left ast.Expression) ast.Expression {
+	expression := &ast.BinaryExpression{
+		Token: p.curToken,
+		Left:  left,
+	}
+	precedence := p.currPrecedence()
+	p.nextToken()
+	expression.Right = p.parseExpression(precedence)
+	return expression
+}
+
+func (p *Parser) currPrecedence() Precedence {
+	return getPrecedence(p.curToken.Type)
+}
+
+func (p *Parser) peekPrecedence() Precedence {
+	return getPrecedence(p.peekToken.Type)
+}
+
+type Precedence int
+
+const (
+	_ = iota
+	LOWEST
+	LOWER
+	MID
+	HIGH
+	HIGHEST
+)
+
+func getPrecedence(tokenType token.TokenType) Precedence {
 	switch tokenType {
-	case token.LPAREN, token.RPAREN:
-		return 3
 	case token.ASTERISK, token.SLASH:
-		return 2
+		return MID
 	case token.PLUS, token.MINUS:
-		return 1
+		return LOWER
 	default:
-		return 0
+		return LOWEST
 	}
 }
 
@@ -143,6 +201,16 @@ func (p *Parser) curTokenIs(t token.TokenType) bool {
 
 func (p *Parser) peekTokenIs(t token.TokenType) bool {
 	return p.peekToken.Type == t
+}
+
+func (p *Parser) expectCurr(t token.TokenType) bool {
+	if p.curTokenIs(t) {
+		p.nextToken()
+		return true
+	} else {
+		p.currError(t)
+		return false
+	}
 }
 
 func (p *Parser) expectPeek(t token.TokenType) bool {
@@ -157,5 +225,10 @@ func (p *Parser) expectPeek(t token.TokenType) bool {
 
 func (p *Parser) peekError(t token.TokenType) {
 	msg := fmt.Sprintf("expected next token to be %s, got %s instead", t, p.peekToken.Type)
+	p.errors = append(p.errors, msg)
+}
+
+func (p *Parser) currError(t token.TokenType) {
+	msg := fmt.Sprintf("expected current token to be %s, got %s instead", t, p.curToken.Type)
 	p.errors = append(p.errors, msg)
 }

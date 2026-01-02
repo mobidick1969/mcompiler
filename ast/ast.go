@@ -39,6 +39,21 @@ func (p *Program) String() string {
 	return out.String()
 }
 
+type ExpressionStatement struct {
+	Token      token.Token
+	Expression Expression
+}
+
+func (es *ExpressionStatement) statementNode() {}
+
+func (es *ExpressionStatement) TokenLiteral() string {
+	return es.Token.Literal
+}
+
+func (es *ExpressionStatement) String() string {
+	return es.Expression.String()
+}
+
 type LetStatement struct {
 	Token token.Token
 	Name  *Identifier
@@ -58,10 +73,25 @@ func (ls *LetStatement) String() string {
 	out.WriteString(" = ")
 	if ls.Value != nil {
 		out.WriteString(ls.Value.String())
+	} else {
+		out.WriteString("nil")
 	}
 	out.WriteString(";")
 	return out.String()
 }
+
+type BooleanLiteral struct {
+	Token token.Token
+	Value bool
+}
+
+func (bl *BooleanLiteral) expressionNode() {}
+
+func (bl *BooleanLiteral) TokenLiteral() string {
+	return bl.Token.Literal
+}
+
+func (bl *BooleanLiteral) String() string { return bl.TokenLiteral() }
 
 type Identifier struct {
 	Token token.Token
@@ -109,6 +139,23 @@ func (rs *ReturnStatement) String() string {
 	return out.String()
 }
 
+type UnaryExpression struct {
+	Token token.Token
+	Right Expression
+}
+
+func (ue *UnaryExpression) expressionNode() {}
+func (ue *UnaryExpression) TokenLiteral() string {
+	return ue.Token.Literal
+}
+func (ue *UnaryExpression) String() string {
+	var out bytes.Buffer
+	out.WriteString("(" + ue.TokenLiteral() + " ")
+	out.WriteString(ue.Right.String())
+	out.WriteString(")")
+	return out.String()
+}
+
 type BinaryExpression struct {
 	Token token.Token
 	Left  Expression
@@ -127,8 +174,30 @@ func (be *BinaryExpression) String() string {
 	out.WriteString(" " + be.Token.Literal + " ")
 	if be.Right != nil {
 		out.WriteString(be.Right.String())
-		out.WriteString(")")
+	} else {
+		out.WriteString("nil")
 	}
+	out.WriteString(")")
 
+	return out.String()
+}
+
+
+type BlockStatement struct {
+	Token      token.Token
+	Statements []Statement
+}
+
+func (bs *BlockStatement) statementNode() {}
+func (bs *BlockStatement) TokenLiteral() string {
+	return bs.Token.Literal
+}
+func (bs *BlockStatement) String() string {
+	var out bytes.Buffer
+	out.WriteString("{")
+	for _, stmt := range bs.Statements {
+		out.WriteString(stmt.String())
+	}
+	out.WriteString("}")
 	return out.String()
 }

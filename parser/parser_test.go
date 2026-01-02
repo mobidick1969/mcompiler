@@ -6,36 +6,77 @@ import (
 	"testing"
 )
 
+func TestParser_ParseExpressionStatement(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"x+y;", "( x + y );"},
+		{"5;", "5;"},
+		{"10;", "10;"},
+		{"a+b;", "a+b;"},
+	}
+	for _, tt := range tests {
+		l := lexer.New(tt.input)
+		p := New(l)
+		program := p.ParseProgram()
+		if len(p.Errors()) > 0 {
+			t.Errorf("errors during parsing:%s", p.Errors())
+			// t.FailNow()
+		}
+		for i, stmt := range program.Statements {
+			if stmt.String() != tt.expected {
+				t.Errorf("stmt %d - wrong string. expected=%q, got=%q",
+					i, tt.expected, stmt.String())
+			} else {
+				t.Logf("stmt %d - correct string. expected=%q, got=%q",
+					i, tt.expected, stmt.String())
+			}
+		}
+	}
+}
 func TestParser_ParseReturnStatement(t *testing.T) {
-	// input := `return a+b+c*d+e/f;
-	// return 5;
-	// return 10;
-	// return a + b * c;
-	// return a+b;
-	input := `return 2*((a*c)+(((a+b)*c)+d)));`
-	// return 2*((a*c)+(((a+b)*c)+d)));
+	input := `
+	return a+b;
+	return 5;
+	return 10;
+	return a + b * c;
+	return a+b;
+	return (a+b)*c+d+e;
+	return -5+3;
+	return -(2*3+(3*(7+3)))+5;
+	return ((5))+3;
+	return (5+3);
+	`
 
 	l := lexer.New(input)
 	p := New(l)
 
 	program := p.ParseProgram()
 	expected := []string{
-		// "return (((a + b) + (c * d)) + (e / f));",
-		// "return 5;",
-		// "return 10;",
-		// "return (a + (b * c));",
-		// "return (a + b);",
-		"return ((a + b) * c);",
-		// "return (2 * ((a * c) + (((a + b) * c) + d)))!;",
+		"return (a + b);",
+		"return 5;",
+		"return 10;",
+		"return (a + (b * c));",
+		"return (a + b);",
+		"return ((((a + b) * c) + d) + e);",
+		"return ((- 5) + 3);",
+		"return ((- ((2 * 3) + (3 * (7 + 3)))) + 5);",
+		"return (5 + 3);",
+		"return (5 + 3);",
 	}
 
 	if len(p.Errors()) > 0 {
 		t.Errorf("errors during parsing:%s", p.Errors())
+		// t.FailNow()
 	}
 
 	for i, exp := range expected {
 		if program.Statements[i].String() != exp {
 			t.Errorf("stmt %d - wrong string. expected=%q, got=%q",
+				i, exp, program.Statements[i].String())
+		} else {
+			t.Logf("stmt %d - correct string. expected=%q, got=%q",
 				i, exp, program.Statements[i].String())
 		}
 	}
@@ -54,20 +95,21 @@ let foobar = 838383;
 	if program == nil {
 		t.Fatalf("ParseProgram() returned nil")
 	}
-	if len(program.Statements) != 3 {
-		t.Fatalf("program.Statements does not contain 3 statements. got=%d",
-			len(program.Statements))
-	}
 
 	tests := []struct{ expectedIdentifier string }{
-		{"x"},
-		{"y"},
-		{"foobar"},
+		{"let x = 5;"},
+		{"let y = 10;"},
+		{"let foobar = 838383;"},
+		// {"let func = fn(a,b){ return a+b;};"},
 	}
 	for i, tt := range tests {
 		stmt := program.Statements[i]
-		if !testLetStatement(t, stmt, tt.expectedIdentifier) {
-			return
+		if stmt.String() != tt.expectedIdentifier {
+			t.Errorf("stmt %d - wrong string. expected=%q, got=%q",
+				i, tt.expectedIdentifier, stmt.String())
+		} else {
+			t.Logf("stmt %d - correct string. expected=%q, got=%q",
+				i, tt.expectedIdentifier, stmt.String())
 		}
 	}
 
