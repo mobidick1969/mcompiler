@@ -223,7 +223,7 @@ func (is *IfStatement) String() string {
 	out.WriteString(" ")
 	out.WriteString(is.Consequence.String())
 	if is.Alternative != nil {
-		out.WriteString(" ")
+		out.WriteString(" else ")
 		out.WriteString(is.Alternative.String())
 	}
 	return out.String()

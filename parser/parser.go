@@ -158,8 +158,14 @@ func (p *Parser) parseFunctionLiteral() ast.Expression {
 
 func (p *Parser) parseIfStatement() ast.Statement {
 	stmt := &ast.IfStatement{Token: p.curToken}
+	if !p.expectPeek(token.LPAREN) {
+		return nil
+	}
 	p.nextToken()
 	stmt.Condition = p.parseExpression(LOWEST)
+	if !p.expectPeek(token.RPAREN) {
+		return nil
+	}
 	if !p.expectPeek(token.LBRACE) {
 		return nil
 	}
