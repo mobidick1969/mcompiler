@@ -46,11 +46,9 @@ func NewParser(input []byte, arena *arena.BestArena) *Parser {
 	}
 }
 
-func (p *Parser) skipWhitespace() {
+func (p *Parser) peekNextToken() byte {
 	// SIMD (SWAR) Optimization
-	// Load 8 bytes, check if they are all whitespace.
-	// If so, advance 8 bytes.
-	// Whitespace: ' ' (32), '\n' (10), '\r' (13), '\t' (9)
+	// ... (comments trimmed for brevity)
 
 	limit := len(p.input) - 8
 	startPtr := unsafe.Pointer(unsafe.SliceData(p.input))
@@ -59,26 +57,12 @@ func (p *Parser) skipWhitespace() {
 		ptr := unsafe.Add(startPtr, p.cursor)
 		val := *(*uint64)(ptr)
 
-		// Logic:
-		// We want to detect if any byte is NOT a whitespace.
-		// If ALL bytes ARE whitespace, we continue.
-		// If ANY byte is NOT whitespace, we stop and use scalar loop to find exact spot.
-
-		// Optimization: Check if any byte > 0x20 (space).
-		// Most structural chars (", :, {, }) are > 0x20.
-		// We use SWAR subtraction to detect bytes > 0x20.
-
 		sub := 0x2020202020202020 - val
 		top := sub & 0x8080808080808080
 
 		if top != 0 {
-			// Found a byte > 0x20 (likely structural char).
-			// We stop SIMD and fallback to scalar to handle it.
 			break
 		}
-
-		// All bytes are <= 0x20. Treat as whitespace and skip.
-		// Note: This aggressively skips control characters (0x00-0x1F) for performance.
 		p.cursor += 8
 	}
 
@@ -87,9 +71,10 @@ func (p *Parser) skipWhitespace() {
 		if c == ' ' || c == '\n' || c == '\t' || c == '\r' {
 			p.cursor++
 		} else {
-			break
+			return c
 		}
 	}
+	return 0 // EOF
 }
 
 // Pre-calculate size and alignment to avoid compile-time lookup overhead in generic function
@@ -97,11 +82,10 @@ const nodeSize = int(unsafe.Sizeof(Node{}))
 const nodeAlign = int(unsafe.Alignof(Node{}))
 
 func (p *Parser) ParseAny() *Node {
-	p.skipWhitespace()
-	if p.cursor >= len(p.input) {
+	char := p.peekNextToken()
+	if char == 0 {
 		panic("Unexpected EOF")
 	}
-	char := p.input[p.cursor]
 
 	switch char {
 	case '"':
@@ -279,10 +263,10 @@ func (p *Parser) scanNumber() string {
 		val := *(*uint64)(ptr)
 
 		// Check if any byte is outside '0'..'9' range using SWAR arithmetic
-		t1 := val - 0x3030303030303030       // Detect < '0'
-		t2 := val + 0x4646464646464646       // Detect > '9'
+		t1 := val - 0x3030303030303030 // Detect < '0'
+		t2 := val + 0x4646464646464646 // Detect > '9'
 		mask := (t1 | t2) & 0x8080808080808080
-		
+
 		if mask != 0 {
 			break
 		}
@@ -323,10 +307,9 @@ func (p *Parser) match(target string) bool {
 }
 
 func (p *Parser) ParseObject() *Node {
-	p.cursor++
-	p.skipWhitespace()
+	p.cursor++ // Skip '{'
 
-	if p.cursor < len(p.input) && p.input[p.cursor] == '}' {
+	if p.peekNextToken() == '}' {
 		p.cursor++
 		var node *Node
 		if p.arena.Offset+nodeSize <= len(p.arena.Current.Data) {
@@ -354,15 +337,13 @@ func (p *Parser) ParseObject() *Node {
 
 	var tail *Node
 	for {
-		p.skipWhitespace()
-		if p.input[p.cursor] != '"' {
+		if p.peekNextToken() != '"' {
 			panic("Expected string key")
 		}
 
 		keyView := p.parseStringValueOnly()
-		p.skipWhitespace()
 
-		if p.input[p.cursor] != ':' {
+		if p.peekNextToken() != ':' {
 			panic("Expected ':' after key")
 		}
 
@@ -376,9 +357,8 @@ func (p *Parser) ParseObject() *Node {
 			tail.Next = valNode
 		}
 		tail = valNode
-		p.skipWhitespace()
 
-		c := p.input[p.cursor]
+		c := p.peekNextToken()
 		if c == '}' {
 			p.cursor++
 			break
@@ -411,10 +391,9 @@ func (p *Parser) parseStringValueOnly() string {
 }
 
 func (p *Parser) ParseArray() *Node {
-	p.cursor++
-	p.skipWhitespace()
+	p.cursor++ // Skip '['
 
-	if p.cursor < len(p.input) && p.input[p.cursor] == ']' {
+	if p.peekNextToken() == ']' {
 		p.cursor++
 		var node *Node
 		if p.arena.Offset+nodeSize <= len(p.arena.Current.Data) {
@@ -443,7 +422,7 @@ func (p *Parser) ParseArray() *Node {
 	var tail *Node
 
 	for {
-		p.skipWhitespace()
+		// p.peekNextToken() is called inside ParseAny
 		valNode := p.ParseAny()
 		if arrNode.Children == nil {
 			arrNode.Children = valNode
@@ -451,9 +430,8 @@ func (p *Parser) ParseArray() *Node {
 			tail.Next = valNode
 		}
 		tail = valNode
-		p.skipWhitespace()
 
-		c := p.input[p.cursor]
+		c := p.peekNextToken()
 		if c == ']' {
 			p.cursor++
 			break

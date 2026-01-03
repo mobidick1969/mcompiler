@@ -20,7 +20,7 @@ Benchmarks run on Apple M1 Max.
 |-----------|---------|----------|-----------|---------|
 | Standard (Map) | 5900 ns | 3120 B | 73 | 1x |
 | Standard (Struct) | 4700 ns | 472 B | 11 | 1.25x |
-| **FastParser (SIMD)** | **751 ns** | **0 B** | **0** | **~7.8x** |
+| **FastParser (SIMD)** | **742 ns** | **0 B** | **0** | **~7.9x** |
 
 ### Large Payload (~1MB)
 
