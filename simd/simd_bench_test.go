@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"mcompiler/arena"
 	"testing"
+
+	"github.com/valyala/fastjson"
 )
 
 var jsonBytes = []byte(`{
@@ -141,6 +143,28 @@ func BenchmarkFastParser_Large(b *testing.B) {
 		a.Reset()
 		p := NewParser(largeJsonBytes, a)
 		_ = p.ParseAny()
+	}
+}
+
+func BenchmarkValyala_Small(b *testing.B) {
+	var p fastjson.Parser
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := p.ParseBytes(jsonBytes)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkValyala_Large(b *testing.B) {
+	var p fastjson.Parser
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := p.ParseBytes(largeJsonBytes)
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 

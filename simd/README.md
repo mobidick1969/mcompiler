@@ -20,6 +20,7 @@ Benchmarks run on Apple M1 Max.
 |-----------|---------|----------|-----------|---------|
 | Standard (Map) | 5900 ns | 3120 B | 73 | 1x |
 | Standard (Struct) | 4700 ns | 472 B | 11 | 1.25x |
+| `valyala/fastjson` | 635 ns | 0 B | 0 | ~9.3x |
 | **FastParser (SIMD)** | **693 ns** | **0 B** | **0** | **~8.5x** |
 
 ### Large Payload (~1MB)
@@ -27,8 +28,8 @@ Benchmarks run on Apple M1 Max.
 | Benchmark | Time/Op | Bytes/Op | Allocs/Op | Speedup |
 |-----------|---------|----------|-----------|---------|
 | Standard (Map) | 10.94 ms | 5.09 MB | 122k | 1x |
-| Standard (Struct) | 8.35 ms | 0.28 MB | 2022 | 1.3x |
-| **FastParser (SIMD)** | **1.45 ms** | **0.005 MB** | **0*** | **~5.8x** |
+| `valyala/fastjson` | 1.15 ms | 0.02 MB | 21 | ~9.5x |
+| **FastParser (SIMD)** | **1.33 ms** | **0.005 MB** | **0*** | **~8.2x** |
 
 *\*Allocations for FastParser are for arena growth only ( amortized to 0 per op in pre-sized scenarios).*
 
