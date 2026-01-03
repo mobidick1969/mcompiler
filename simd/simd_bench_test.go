@@ -152,21 +152,6 @@ func BenchmarkFastParser_Large(b *testing.B) {
 // 100 chars, escape at the end
 var stringBenchData = []byte(`"This is a relatively long string that has an escaped quote \" right here to test the scanning logic."`)
 
-func BenchmarkFindClosingQuoteLength(b *testing.B) {
-	// Setup parser with just this string
-	a := arena.NewBestArena()
-	p := NewParser(stringBenchData, a)
-	// Point cursor to start of quote + 1 (as if ParseString did p.cursor++)
-	p.cursor = 1
-	
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		// Reset cursor simulation
-		p.cursor = 1
-		_ = p.findClosingQuoteLength()
-	}
-}
-
 func BenchmarkScanStringBoundary(b *testing.B) {
 	a := arena.NewBestArena()
 	p := NewParser(stringBenchData, a)

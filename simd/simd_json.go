@@ -32,46 +32,6 @@ type Node struct {
 	Type     NodeType
 }
 
-func hasQuote(v uint64) uint64 {
-	lo := uint64(lsb)
-	hi := uint64(msb)
-	diff := v ^ (0x22 * lo)
-	return (diff - lo) & (^diff) & hi
-}
-
-type QuoteScanner struct {
-	data []byte
-}
-
-func NewQuoteScanner(input []byte) *QuoteScanner {
-	return &QuoteScanner{
-		data: input,
-	}
-}
-
-func (s *QuoteScanner) FindQuoteFast(startIdx int) int {
-	limit := len(s.data) - 8
-	startPtr := unsafe.Pointer(unsafe.SliceData(s.data))
-	for i := startIdx; i <= limit; i += 8 {
-		// This conversion is safe because we are taking the address of an element
-		// in the slice which is live at this point.
-		val := *(*uint64)(unsafe.Add(startPtr, i))
-		xor := val ^ 0x2222222222222222
-		hasZero := (xor - lsb) & (^xor) & msb
-		if hasZero != 0 {
-			zeros := bits.TrailingZeros64(hasZero)
-			idx := zeros >> 3
-			return i + idx
-		}
-	}
-	for i := startIdx; i < len(s.data); i++ {
-		if s.data[i] == '"' {
-			return i
-		}
-	}
-	return -1
-}
-
 type Parser struct {
 	input  []byte
 	cursor int
@@ -418,18 +378,14 @@ func (p *Parser) parseStringValueOnly() string {
 	}
 	p.cursor++
 
-	startIdx := p.cursor
-
-	len := p.findClosingQuoteLength()
-	if len == -1 {
-		panic("Key string not closed")
-	}
+	// Use synchronized SIMD scanning
+	strLen, _ := p.scanStringBoundary()
 
 	basePtr := unsafe.SliceData(p.input)
-	strStartPtr := unsafe.Pointer(uintptr(unsafe.Pointer(basePtr)) + uintptr(startIdx))
-	view := unsafe.String((*byte)(strStartPtr), len)
+	strStartPtr := unsafe.Add(unsafe.Pointer(basePtr), p.cursor)
+	view := unsafe.String((*byte)(strStartPtr), strLen)
 
-	p.cursor += len + 1
+	p.cursor += strLen + 1
 
 	return view
 }
@@ -563,65 +519,4 @@ func main() {
 
 	configChild2 := configChild1.Next
 	fmt.Printf("  -> Config Field 2: Key=%s, Val=%s\n", configChild2.Key, configChild2.ValueStr)
-}
-
-func (p *Parser) findClosingQuoteLength() int {
-	data := p.input
-	curr := p.cursor
-	end := len(data)
-
-	limit := end - 8
-
-	basePtr := unsafe.Pointer(unsafe.SliceData(data))
-
-	for curr <= limit {
-		ptr := unsafe.Add(basePtr, curr)
-
-		val := *(*uint64)(ptr) // Unaligned Load
-
-		// SWAR Logic
-		xor := val ^ 0x2222222222222222
-		hasZero := (xor - 0x0101010101010101) & (^xor) & 0x8080808080808080
-
-		if hasZero != 0 {
-			zeros := bits.TrailingZeros64(hasZero)
-			idx := zeros >> 3
-			realIdx := (curr - p.cursor) + idx
-
-			// Check for even number of backslashes
-			bsCount := 0
-			// realIdx is relative to p.cursor, so absolute index in data is p.cursor + realIdx
-			checkIdx := p.cursor + realIdx - 1
-			for checkIdx >= 0 && data[checkIdx] == '\\' {
-				bsCount++
-				checkIdx--
-			}
-
-			if bsCount%2 == 0 {
-				return realIdx
-			}
-			curr = p.cursor + realIdx + 1
-			goto LinearScan
-		}
-		curr += 8
-	}
-
-LinearScan:
-	for curr < end {
-		if data[curr] == '"' {
-			// Check for even number of backslashes
-			bsCount := 0
-			checkIdx := curr - 1
-			for checkIdx >= 0 && data[checkIdx] == '\\' {
-				bsCount++
-				checkIdx--
-			}
-			if bsCount%2 == 0 {
-				return curr - p.cursor
-			}
-		}
-		curr++
-	}
-
-	return -1
 }
