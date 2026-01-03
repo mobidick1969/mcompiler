@@ -48,8 +48,6 @@ func NewParser(input []byte, arena *arena.BestArena) *Parser {
 
 func (p *Parser) peekNextToken() byte {
 	// SIMD (SWAR) Optimization
-	// ... (comments trimmed for brevity)
-
 	limit := len(p.input) - 8
 	startPtr := unsafe.Pointer(unsafe.SliceData(p.input))
 
@@ -79,7 +77,6 @@ func (p *Parser) peekNextToken() byte {
 	return 0 // EOF
 }
 
-// Pre-calculate size and alignment to avoid compile-time lookup overhead in generic function
 const nodeSize = int(unsafe.Sizeof(Node{}))
 const nodeAlign = int(unsafe.Alignof(Node{}))
 
@@ -220,7 +217,7 @@ func (p *Parser) scanStringBoundary() (int, bool) {
 		}
 
 		if quoteIdx == -1 {
-			panic("String not closed") // or return error
+			panic("String not closed")
 		}
 
 		// ---------------------------------------------------------------------
@@ -417,7 +414,6 @@ func (p *Parser) ParseArray() *Node {
 	var tail *Node
 
 	for {
-		// p.peekNextToken() is called inside ParseAny
 		valNode := p.ParseAny()
 		if arrNode.Children == nil {
 			arrNode.Children = valNode
@@ -465,10 +461,6 @@ func (p *Parser) ParseString() *Node {
 	*node = Node{} // Zero-initialize
 	node.Type = String
 
-	// Optimization: Always use Zero-Copy.
-	// For maximum performance and 0-allocation, we return the raw slice reference.
-	// Note: Strings with escapes will contain raw backslashes (e.g. "a\"b").
-	// A compliant implementation should unescape if hasEscape is true.
 	basePtr := unsafe.SliceData(p.input)
 	strStartPtr := unsafe.Add(unsafe.Pointer(basePtr), p.cursor)
 	node.ValueStr = unsafe.String((*byte)(strStartPtr), strLen)
