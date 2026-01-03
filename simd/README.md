@@ -18,17 +18,17 @@ Benchmarks run on Apple M1 Max.
 
 | Benchmark | Time/Op | Bytes/Op | Allocs/Op | Speedup |
 |-----------|---------|----------|-----------|---------|
-| Standard (Map) | 5993 ns | 3120 B | 73 | 1x |
-| Standard (Struct) | 4673 ns | 472 B | 11 | 1.3x |
-| **FastParser (SIMD)** | **726 ns** | **0 B** | **0** | **~8.2x** |
+| Standard (Map) | 5900 ns | 3120 B | 73 | 1x |
+| Standard (Struct) | 4700 ns | 472 B | 11 | 1.25x |
+| **FastParser (SIMD)** | **751 ns** | **0 B** | **0** | **~7.8x** |
 
 ### Large Payload (~1MB)
 
 | Benchmark | Time/Op | Bytes/Op | Allocs/Op | Speedup |
 |-----------|---------|----------|-----------|---------|
-| Standard (Map) | 10.87 ms | 5.09 MB | 122k | 1x |
-| Standard (Struct) | 8.31 ms | 0.28 MB | 2022 | 1.3x |
-| **FastParser (SIMD)** | **1.45 ms** | **0.005 MB** | **0*** | **~5.7x** |
+| Standard (Map) | 10.94 ms | 5.09 MB | 122k | 1x |
+| Standard (Struct) | 8.35 ms | 0.28 MB | 2022 | 1.3x |
+| **FastParser (SIMD)** | **1.45 ms** | **0.005 MB** | **0*** | **~5.8x** |
 
 *\*Allocations for FastParser are for arena growth only ( amortized to 0 per op in pre-sized scenarios).*
 

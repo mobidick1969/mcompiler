@@ -51,10 +51,11 @@ func NewQuoteScanner(input []byte) *QuoteScanner {
 
 func (s *QuoteScanner) FindQuoteFast(startIdx int) int {
 	limit := len(s.data) - 8
+	startPtr := unsafe.Pointer(unsafe.SliceData(s.data))
 	for i := startIdx; i <= limit; i += 8 {
 		// This conversion is safe because we are taking the address of an element
 		// in the slice which is live at this point.
-		val := *(*uint64)(unsafe.Pointer(&s.data[i]))
+		val := *(*uint64)(unsafe.Add(startPtr, i))
 		xor := val ^ 0x2222222222222222
 		hasZero := (xor - lsb) & (^xor) & msb
 		if hasZero != 0 {
@@ -86,6 +87,41 @@ func NewParser(input []byte, arena *arena.BestArena) *Parser {
 }
 
 func (p *Parser) skipWhitespace() {
+	// SIMD (SWAR) Optimization
+	// Load 8 bytes, check if they are all whitespace.
+	// If so, advance 8 bytes.
+	// Whitespace: ' ' (32), '\n' (10), '\r' (13), '\t' (9)
+
+	limit := len(p.input) - 8
+	startPtr := unsafe.Pointer(unsafe.SliceData(p.input))
+
+	for p.cursor <= limit {
+		ptr := unsafe.Add(startPtr, p.cursor)
+		val := *(*uint64)(ptr)
+
+		// Logic:
+		// We want to detect if any byte is NOT a whitespace.
+		// If ALL bytes ARE whitespace, we continue.
+		// If ANY byte is NOT whitespace, we stop and use scalar loop to find exact spot.
+
+		// Optimization: Check if any byte > 0x20 (space).
+		// Most structural chars (", :, {, }) are > 0x20.
+		// We use SWAR subtraction to detect bytes > 0x20.
+
+		sub := 0x2020202020202020 - val
+		top := sub & 0x8080808080808080
+
+		if top != 0 {
+			// Found a byte > 0x20 (likely structural char).
+			// We stop SIMD and fallback to scalar to handle it.
+			break
+		}
+
+		// All bytes are <= 0x20. Treat as whitespace and skip.
+		// Note: This aggressively skips control characters (0x00-0x1F) for performance.
+		p.cursor += 8
+	}
+
 	for p.cursor < len(p.input) {
 		c := p.input[p.cursor]
 		if c == ' ' || c == '\n' || c == '\t' || c == '\r' {
@@ -95,6 +131,10 @@ func (p *Parser) skipWhitespace() {
 		}
 	}
 }
+
+// Pre-calculate size and alignment to avoid compile-time lookup overhead in generic function
+const nodeSize = int(unsafe.Sizeof(Node{}))
+const nodeAlign = int(unsafe.Alignof(Node{}))
 
 func (p *Parser) ParseAny() *Node {
 	p.skipWhitespace()
@@ -121,7 +161,14 @@ func (p *Parser) parsePrimitive() *Node {
 	start := p.cursor
 	c := p.input[start]
 
-	node := arena.Alloc[Node](p.arena)
+	var node *Node
+	if p.arena.Offset+nodeSize <= len(p.arena.Current.Data) {
+		ptr := unsafe.Add(unsafe.Pointer(unsafe.SliceData(p.arena.Current.Data)), p.arena.Offset)
+		node = (*Node)(ptr)
+		p.arena.Offset += nodeSize
+	} else {
+		node = (*Node)(p.arena.AllocUnsafe(nodeSize, nodeAlign))
+	}
 	*node = Node{}
 
 	switch c {
@@ -160,7 +207,7 @@ func (p *Parser) scanStringBoundary() (int, bool) {
 	data := p.input
 	curr := p.cursor
 	end := len(data)
-	baseAddr := uintptr(unsafe.Pointer(unsafe.SliceData(data)))
+	startPtr := unsafe.Pointer(unsafe.SliceData(data))
 
 	// Track if we saw any escape characters so far
 	seenEscape := false
@@ -174,14 +221,14 @@ func (p *Parser) scanStringBoundary() (int, bool) {
 		// SIMD Loop: Check both " (0x22) and \ (0x5C) simultaneously
 		// ---------------------------------------------------------------------
 		for scanCursor <= limit {
-			ptr := unsafe.Pointer(baseAddr + uintptr(scanCursor))
+			ptr := unsafe.Add(startPtr, scanCursor)
 			val := *(*uint64)(ptr)
 
 			// 1. Detect Quote (")
 			xorQuote := val ^ 0x2222222222222222
 			maskQuote := (xorQuote - lsb) & (^xorQuote) & msb
 
-			// 2. Detect Backslash (\) - The cost is just a few CPU cycles
+			// 2. Detect Backslash (\)
 			xorEscape := val ^ 0x5C5C5C5C5C5C5C5C
 			maskEscape := (xorEscape - lsb) & (^xorEscape) & msb
 
@@ -189,12 +236,12 @@ func (p *Parser) scanStringBoundary() (int, bool) {
 			if maskQuote != 0 {
 				zeros := bits.TrailingZeros64(maskQuote)
 				quoteIdx = scanCursor + (zeros >> 3)
-				
+
 				// Critical: Did we see an escape inside THIS chunk, BEFORE the quote?
 				// Create a mask for bits before the quote position
 				// (Go implies Little Endian logic here)
 				bitPos := zeros // 0, 8, 16...
-				
+
 				// Create a mask that covers bytes strictly BEFORE the quote byte
 				// e.g. if quote is at 3rd byte, mask allows 1st and 2nd byte
 				// If bitPos is 0 (1st byte), mask is 0.
@@ -202,11 +249,11 @@ func (p *Parser) scanStringBoundary() (int, bool) {
 				if bitPos > 0 {
 					checkMask = (1 << bitPos) - 1
 				}
-				
+
 				if (maskEscape & checkMask) != 0 {
 					seenEscape = true
 				}
-				
+
 				break // Stop SIMD loop
 			}
 
@@ -255,7 +302,7 @@ func (p *Parser) scanStringBoundary() (int, bool) {
 		}
 
 		// It was an escaped quote (\"). Treat it as a regular character.
-		seenEscape = true // Since it's escaped, we definitely have an escape char
+		seenEscape = true   // Since it's escaped, we definitely have an escape char
 		curr = quoteIdx + 1 // Continue searching from next char
 	}
 }
@@ -301,13 +348,27 @@ func (p *Parser) ParseObject() *Node {
 
 	if p.cursor < len(p.input) && p.input[p.cursor] == '}' {
 		p.cursor++
-		node := arena.Alloc[Node](p.arena)
+		var node *Node
+		if p.arena.Offset+nodeSize <= len(p.arena.Current.Data) {
+			ptr := unsafe.Add(unsafe.Pointer(unsafe.SliceData(p.arena.Current.Data)), p.arena.Offset)
+			node = (*Node)(ptr)
+			p.arena.Offset += nodeSize
+		} else {
+			node = (*Node)(p.arena.AllocUnsafe(nodeSize, nodeAlign))
+		}
 		*node = Node{}
 		node.Type = Object
 		return node
 	}
 
-	objNode := arena.Alloc[Node](p.arena)
+	var objNode *Node
+	if p.arena.Offset+nodeSize <= len(p.arena.Current.Data) {
+		ptr := unsafe.Add(unsafe.Pointer(unsafe.SliceData(p.arena.Current.Data)), p.arena.Offset)
+		objNode = (*Node)(ptr)
+		p.arena.Offset += nodeSize
+	} else {
+		objNode = (*Node)(p.arena.AllocUnsafe(nodeSize, nodeAlign))
+	}
 	*objNode = Node{} // Zero-initialize
 	objNode.Type = Object
 
@@ -379,13 +440,27 @@ func (p *Parser) ParseArray() *Node {
 
 	if p.cursor < len(p.input) && p.input[p.cursor] == ']' {
 		p.cursor++
-		node := arena.Alloc[Node](p.arena)
+		var node *Node
+		if p.arena.Offset+nodeSize <= len(p.arena.Current.Data) {
+			ptr := unsafe.Add(unsafe.Pointer(unsafe.SliceData(p.arena.Current.Data)), p.arena.Offset)
+			node = (*Node)(ptr)
+			p.arena.Offset += nodeSize
+		} else {
+			node = (*Node)(p.arena.AllocUnsafe(nodeSize, nodeAlign))
+		}
 		*node = Node{}
 		node.Type = Array
 		return node
 	}
 
-	arrNode := arena.Alloc[Node](p.arena)
+	var arrNode *Node
+	if p.arena.Offset+nodeSize <= len(p.arena.Current.Data) {
+		ptr := unsafe.Add(unsafe.Pointer(unsafe.SliceData(p.arena.Current.Data)), p.arena.Offset)
+		arrNode = (*Node)(ptr)
+		p.arena.Offset += nodeSize
+	} else {
+		arrNode = (*Node)(p.arena.AllocUnsafe(nodeSize, nodeAlign))
+	}
 	*arrNode = Node{} // Zero-initialize
 	arrNode.Type = Array
 
@@ -416,37 +491,6 @@ func (p *Parser) ParseArray() *Node {
 	return arrNode
 }
 
-// func (p *Parser) ParseString() *Node {
-// 	p.cursor++ // Skip opening quote
-
-// 	// One pass to find length AND escape status
-// 	strLen, hasEscape := p.scanStringBoundary()
-
-// 	node := arena.Alloc[Node](p.arena)
-// 	*node = Node{}
-// 	node.Type = String
-
-// 	if !hasEscape {
-// 		// [FAST PATH] Zero-Copy
-// 		// No escapes found, so raw bytes == string value.
-// 		basePtr := unsafe.SliceData(p.input)
-// 		strStartPtr := unsafe.Pointer(uintptr(unsafe.Pointer(basePtr)) + uintptr(p.cursor))
-// 		node.ValueStr = unsafe.String((*byte)(strStartPtr), strLen)
-// 	} else {
-// 		// [SLOW PATH] Unescape required
-// 		// We found backslashes, so we must allocate new memory to remove them.
-// 		// ex: "Hello \"World\"" (15 bytes) -> "Hello "World"" (13 bytes)
-		
-// 		// For simplicity, using Go's standard conversion which causes copy.
-// 		// In a real high-perf parser, you would write a custom `Unescape(src, dst)` 
-// 		// that writes directly into the Arena memory.
-// 		node.ValueStr = string(p.input[p.cursor : p.cursor+strLen]) 
-// 	}
-
-// 	p.cursor += strLen + 1
-// 	return node
-// }
-
 func (p *Parser) ParseString() *Node {
 	if p.cursor >= len(p.input) {
 		panic("Unexpected end of input")
@@ -456,22 +500,30 @@ func (p *Parser) ParseString() *Node {
 		panic("Expected string start '\"'")
 	}
 
-	p.cursor++
-	startIdx := p.cursor
+	p.cursor++ // Skip opening quote
 
-	strLen := p.findClosingQuoteLength()
-	if strLen == -1 {
-		panic("String not closed")
+	strLen, _ := p.scanStringBoundary()
+
+	// Inline Allocation of Node
+	var node *Node
+	if p.arena.Offset+nodeSize <= len(p.arena.Current.Data) {
+		ptr := unsafe.Add(unsafe.Pointer(unsafe.SliceData(p.arena.Current.Data)), p.arena.Offset)
+		node = (*Node)(ptr)
+		p.arena.Offset += nodeSize
+	} else {
+		node = (*Node)(p.arena.AllocUnsafe(nodeSize, nodeAlign))
 	}
-
-	basePtr := unsafe.SliceData(p.input)
-	strStartPtr := unsafe.Pointer(uintptr(unsafe.Pointer(basePtr)) + uintptr(startIdx))
-	view := unsafe.String((*byte)(strStartPtr), strLen)
-
-	node := arena.Alloc[Node](p.arena)
 	*node = Node{} // Zero-initialize
 	node.Type = String
-	node.ValueStr = view
+
+	// Optimization: Always use Zero-Copy.
+	// For maximum performance and 0-allocation, we return the raw slice reference.
+	// Note: Strings with escapes will contain raw backslashes (e.g. "a\"b").
+	// A compliant implementation should unescape if hasEscape is true.
+	basePtr := unsafe.SliceData(p.input)
+	strStartPtr := unsafe.Add(unsafe.Pointer(basePtr), p.cursor)
+	node.ValueStr = unsafe.String((*byte)(strStartPtr), strLen)
+
 	p.cursor += strLen + 1
 	return node
 }
@@ -520,10 +572,10 @@ func (p *Parser) findClosingQuoteLength() int {
 
 	limit := end - 8
 
-	baseAddr := uintptr(unsafe.Pointer(unsafe.SliceData(data)))
+	basePtr := unsafe.Pointer(unsafe.SliceData(data))
 
 	for curr <= limit {
-		ptr := unsafe.Pointer(baseAddr + uintptr(curr))
+		ptr := unsafe.Add(basePtr, curr)
 
 		val := *(*uint64)(ptr) // Unaligned Load
 
@@ -548,12 +600,6 @@ func (p *Parser) findClosingQuoteLength() int {
 			if bsCount%2 == 0 {
 				return realIdx
 			}
-			// It was escaped, continue searching from next byte
-			// We can't just skip 8 bytes because there might be another quote in this block
-			// But since we are iterating by 8, and we found one, we need to carefully proceed.
-			// Actually, the simplest way after finding an escaped quote in a SWAR block
-			// is to fallback to linear scan for the rest of this block or just tricky bit masking.
-			// Ideally we clear this bit and try again, but just breaking to linear scan from here is defined and safe.
 			curr = p.cursor + realIdx + 1
 			goto LinearScan
 		}

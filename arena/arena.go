@@ -73,23 +73,23 @@ func (a *BetterArena) Reset() {
 
 const initialChunkSize = 4096
 
-type chunk struct {
-	data []byte
-	next *chunk
+type Chunk struct {
+	Data []byte
+	Next *Chunk
 }
 
 type BestArena struct {
-	head    *chunk
-	current *chunk
-	offset  int
+	Head    *Chunk
+	Current *Chunk
+	Offset  int
 }
 
 func NewBestArena() *BestArena {
-	c := &chunk{data: make([]byte, initialChunkSize)}
+	c := &Chunk{Data: make([]byte, initialChunkSize)}
 	return &BestArena{
-		head:    c,
-		current: c,
-		offset:  0,
+		Head:    c,
+		Current: c,
+		Offset:  0,
 	}
 }
 
@@ -98,38 +98,51 @@ func Alloc[T any](a *BestArena) *T {
 	size := int(unsafe.Sizeof(zero))
 	align := int(unsafe.Alignof(zero))
 
-	padding := (align - (a.offset & (align - 1))) & (align - 1)
-	if a.offset+padding+size > len(a.current.data) {
+	padding := (align - (a.Offset & (align - 1))) & (align - 1)
+	if a.Offset+padding+size > len(a.Current.Data) {
 		a.grow(size)
 		padding = 0
 	}
 
-	a.offset += padding
-	ptr := unsafe.Pointer(&a.current.data[a.offset])
-	a.offset += size
+	a.Offset += padding
+	ptr := unsafe.Pointer(&a.Current.Data[a.Offset])
+	a.Offset += size
 	return (*T)(ptr)
 }
 
 func (a *BestArena) grow(requiredSize int) {
-	newSize := len(a.current.data) * 2
+	newSize := len(a.Current.Data) * 2
 	if requiredSize > newSize {
 		newSize = requiredSize
 	}
 
-	if a.current.next != nil {
-		if len(a.current.next.data) >= newSize {
-			a.current = a.current.next
-			a.offset = 0
+	if a.Current.Next != nil {
+		if len(a.Current.Next.Data) >= newSize {
+			a.Current = a.Current.Next
+			a.Offset = 0
 			return
 		}
 	}
-	newChunk := &chunk{data: make([]byte, newSize)}
-	a.current.next = newChunk
-	a.current = newChunk
-	a.offset = 0
+	newChunk := &Chunk{Data: make([]byte, newSize)}
+	a.Current.Next = newChunk
+	a.Current = newChunk
+	a.Offset = 0
 }
 
 func (a *BestArena) Reset() {
-	a.current = a.head
-	a.offset = 0
+	a.Current = a.Head
+	a.Offset = 0
+}
+
+func (a *BestArena) AllocUnsafe(size, align int) unsafe.Pointer {
+	padding := (align - (a.Offset & (align - 1))) & (align - 1)
+	if a.Offset+padding+size > len(a.Current.Data) {
+		a.grow(size)
+		padding = 0
+	}
+
+	a.Offset += padding
+	ptr := unsafe.Pointer(&a.Current.Data[a.Offset])
+	a.Offset += size
+	return ptr
 }
