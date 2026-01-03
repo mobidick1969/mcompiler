@@ -181,14 +181,8 @@ func (p *Parser) scanStringBoundary() (int, bool) {
 				zeros := bits.TrailingZeros64(maskQuote)
 				quoteIdx = scanCursor + (zeros >> 3)
 
-				// Critical: Did we see an escape inside THIS chunk, BEFORE the quote?
-				// Create a mask for bits before the quote position
-				// (Go implies Little Endian logic here)
 				bitPos := zeros // 0, 8, 16...
 
-				// Create a mask that covers bytes strictly BEFORE the quote byte
-				// e.g. if quote is at 3rd byte, mask allows 1st and 2nd byte
-				// If bitPos is 0 (1st byte), mask is 0.
 				var checkMask uint64
 				if bitPos > 0 {
 					checkMask = (1 << bitPos) - 1
@@ -245,9 +239,8 @@ func (p *Parser) scanStringBoundary() (int, bool) {
 			return quoteIdx - p.cursor, seenEscape
 		}
 
-		// It was an escaped quote (\"). Treat it as a regular character.
-		seenEscape = true   // Since it's escaped, we definitely have an escape char
-		curr = quoteIdx + 1 // Continue searching from next char
+		seenEscape = true
+		curr = quoteIdx + 1
 	}
 }
 
