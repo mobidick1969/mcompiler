@@ -269,6 +269,26 @@ func (p *Parser) scanStringBoundary() (int, bool) {
 
 func (p *Parser) scanNumber() string {
 	start := p.cursor
+
+	limit := len(p.input) - 8
+	startPtr := unsafe.Pointer(unsafe.SliceData(p.input))
+
+	// SIMD: Skip contiguous digits ('0'..'9')
+	for p.cursor <= limit {
+		ptr := unsafe.Add(startPtr, p.cursor)
+		val := *(*uint64)(ptr)
+
+		// Check if any byte is outside '0'..'9' range using SWAR arithmetic
+		t1 := val - 0x3030303030303030       // Detect < '0'
+		t2 := val + 0x4646464646464646       // Detect > '9'
+		mask := (t1 | t2) & 0x8080808080808080
+		
+		if mask != 0 {
+			break
+		}
+		p.cursor += 8
+	}
+
 	for p.cursor < len(p.input) {
 		c := p.input[p.cursor]
 		if isNumChar(c) {
@@ -280,7 +300,7 @@ func (p *Parser) scanNumber() string {
 
 	len := p.cursor - start
 	basePtr := unsafe.SliceData(p.input)
-	strStartPtr := unsafe.Pointer(uintptr(unsafe.Pointer(basePtr)) + uintptr(start))
+	strStartPtr := unsafe.Add(unsafe.Pointer(basePtr), start)
 	view := unsafe.String((*byte)(strStartPtr), len)
 	return view
 }
