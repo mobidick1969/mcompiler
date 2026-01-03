@@ -1,0 +1,4 @@
+
+# Test binaries and profiles
+*.test
+*.prof

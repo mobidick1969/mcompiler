@@ -68,7 +68,9 @@ func (p *Parser) peekNextToken() byte {
 
 	for p.cursor < len(p.input) {
 		c := p.input[p.cursor]
-		if c == ' ' || c == '\n' || c == '\t' || c == '\r' {
+		// Optimization: Treat all chars <= 0x20 as whitespace.
+		// Matches SIMD behavior and reduces branches.
+		if c <= ' ' {
 			p.cursor++
 		} else {
 			return c
