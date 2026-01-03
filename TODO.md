@@ -1,30 +1,30 @@
 # mcompiler TODO List
 
-이 파일은 `mcompiler`의 발전 방향과 추가하고 싶은 최신 최적화 기법들을 정리한 문서입니다.
+This file documents the future direction of `mcompiler` and modern optimization techniques we wish to implement.
 
-## 🚀 Parser 최적화 및 고도화 계획
+## 🚀 Parser Optimization and Enhancement Plan
 
-- [ ] **1. 오류 복구 (Error Recovery & Panic Mode)**
-    - 문법 오류 발생 시 바로 멈추지 않고 다음 세미콜론(`;`)이나 중괄호(`}`)까지 건너뛰어 여러 에러를 한 번에 검출하는 기법 구현.
-- [ ] **2. 증분 파싱 (Incremental Parsing)**
-    - 코드 수정 시 전체를 다시 파싱하지 않고, 바뀐 범위(Interval) 또는 해시(Hash) 기반으로 AST의 일부만 업데이트하는 최적화.
-- [ ] **3. 메모리 및 리소스 최적화**
-    - **Arena Allocation**: AST 노드들을 개별 할당하지 않고 커다란 메모지 블록에서 일괄 할당하여 GC 부하 감소.
-    - **String Interning**: 동일한 식별자 이름에 대해 메모리 주소를 공유하여 메모리 사용량 최적화.
-- [ ] **4. 고급 파싱 기법 도입**
-    - **Pratt Parsing**: 연산자 우선순위를 효율적으로 처리하는 테이블 기반 파싱.
-    - **Parallel Parsing**: 여러 파일을 병렬로 파싱하여 대규모 프로젝트 빌드 속도 향상.
+- [ ] **1. Error Recovery (Panic Mode)**
+    - Instead of stopping immediately on syntax errors, skip to the next semicolon (`;`) or brace (`}`) to detect multiple errors at once.
+- [ ] **2. Incremental Parsing**
+    - Optimize by updating only parts of the AST based on the changed range (Interval) or Hash, rather than re-parsing the entire code upon modification.
+- [ ] **3. Memory and Resource Optimization**
+    - **Arena Allocation**: Reduce GC load by allocating AST nodes in bulk from large memory blocks instead of individually.
+    - **String Interning**: Optimize memory usage by sharing memory addresses for identical identifier names.
+- [ ] **4. Advanced Parsing Techniques**
+    - **Pratt Parsing**: Table-based parsing to efficiently handle operator precedence.
+    - **Parallel Parsing**: Improve build speed for large projects by parsing multiple files in parallel.
 
-## 🧠 대규모 프로젝트 메모리 관리 전략 (추후 고려)
+## 🧠 Memory Management Strategy for Large Scale Projects (Future Consideration)
 
 - [ ] **1. On-demand & Lazy Parsing**
-    - 필요한 시점에만 파싱하고, 사용이 끝나면 AST 노드를 즉시 메모리에서 해제하는 전략.
-- [ ] **2. 컴팩트 AST 구조 설계**
-    - 포인터 대신 정수 인덱스를 사용하거나 Flyweight 패턴을 적용하여 노드 당 메모리 점유율 최소화.
-- [ ] **3. 심볼 요약 및 직렬화 (Serialization)**
-    - 전체 AST 대신 타입 체크에 필요한 정보만 요약하여 바이너리(`.a`) 형태로 저장 및 로드.
-- [ ] **4. 증분 컴파일 (Incremental Compilation)**
-    - 수정된 파일만 다시 컴파일하고 결과물을 캐싱하여 기가급 프로젝트의 중복 작업 방지.
+    - Strategy to parse only when needed and immediately release AST nodes from memory when finished.
+- [ ] **2. Compact AST Structure Design**
+    - Minimize per-node memory usage by using integer indices instead of pointers or applying the Flyweight pattern.
+- [ ] **3. Symbol Summary and Serialization**
+    - Store and load only the information necessary for type checking in binary form (`.a`) instead of the entire AST.
+- [ ] **4. Incremental Compilation**
+    - Prevent redundant work in gigabyte-scale projects by recompiling only modified files and caching the results.
 
 ---
-*추가하고 싶은 아이디어가 생기면 언제든 말씀해 주세요!*
+*Please feel free to suggest any additional ideas!*
