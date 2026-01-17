@@ -89,3 +89,18 @@ go test -bench=FastParser -cpuprofile cpu.prof
 ```bash
 brew install graphviz
 ```
+
+**Q: How do I verify that Arena actually reduced GC pressure?**
+**A:** Run benchmarks with `GODEBUG=gctrace=1`. This prints a log every time GC runs.
+```bash
+GODEBUG=gctrace=1 go test -bench=GC_Pressure
+```
+*   **Standard Lib**: You will see many GC logs (frequent cycles).
+*   **Arena**: You should see almost **zero** logs (or very few), confirming that no garbage is being generated.
+
+**Q: How do I read the GC time from `gctrace`?**
+**A:** Look at the `cpu` fields in the log:
+`gc # @...s 0%: ... 0.30+... ms cpu`
+*   This indicates how much CPU time was spent on GC work for that cycle.
+*   Note: `go test` does not have a flag to simply add a "GC Time" column to the benchmark output table.
+
