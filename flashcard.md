@@ -24,13 +24,68 @@ func BenchmarkTooSlow(b *testing.B) {
     b.Skip("This takes too long")
     // ...
 }
+
+## 🔥 Advanced Profiling (pprof)
+
+**Q: How do I generate CPU and Memory profiles from benchmarks?**
+**A:** Use flags `-cpuprofile` and `-memprofile`:
+```bash
+go test -bench=. -cpuprofile cpu.prof -memprofile mem.prof
 ```
 
-## 🛠️ Git & GitHub
+**Q: How do I see which specific lines are slow?**
+**A:** Open the profile with `go tool pprof` and use `list` command:
+```bash
+go tool pprof cpu.prof
+(pprof) list MySlowFunction
+```
 
-**Q: What does "error: GH007: Your push would publish a private email address" mean?**
-**A:** GitHub's "Block command line pushes that expose my email" setting is on, but your local git config (`user.email`) is using a private email (or one not verified).
-**Fix:** Check email with `git config user.email` and change it to your public GitHub email or the `users.noreply.github.com` address.
+**Q: How do I check for "Hidden" Allocations (Heap Analysis)?**
+**A:** Check `alloc_objects` (count) and `alloc_space` (bytes):
+```bash
+# Check allocation count (Are we creating too many objects?)
+go tool pprof -top -alloc_objects mem.prof
 
-**Q: How do I fix the author email of the last commit?**
-**A:** `git commit --amend --reset-author` (after updating `git config user.email`).
+# Check allocation size (Are we creating huge objects?)
+go tool pprof -top -alloc_space mem.prof
+```
+
+**Q: What is "Assembly Analysis" in pprof?**
+**A:** If `list` isn't detailed enough, use `disasm` to see the Assembly code. This helps spot memory moves (`MOV`), bounds checks, or lack of SIMD instructions.
+```bash
+(pprof) disasm MySlowFunction
+```
+
+**Q: Why does `disasm` or `list` fail with "no matches found"?**
+**A:** `pprof` needs the **executable binary** to read assembly/source code.
+If you just ran `go tool pprof cpu.prof`, it might not find the binary.
+**Fix:** Explicitly provide the binary:
+```bash
+go tool pprof simd.test cpu.prof
+```
+*(Note: `go test -cpuprofile` creates both `.prof` and `.test` files)*
+
+**Q: How do I profile ONLY a specific benchmark function?**
+**A:** Combine `-bench` filter with profile flags:
+```bash
+# Profile only benchmarks matching "FastParser"
+go test -bench=FastParser -cpuprofile cpu.prof
+```
+
+**Q: Useful pprof Interactive Commands Cheat Sheet**
+| Command | Description |
+|:---|:---|
+| `top` / `top20` | Show top functions by flat time (default). |
+| `top -cum` | Show top functions by **cumulative** time (useful to find heavy call stacks). |
+| `list <Func>` | Show source code of `<Func>` with CPU/Memory usage per line. |
+| `peek <Func>` | Show callers (who called this) and callees (who this calls). |
+| `disasm <Func>` | Show assembly instructions annotated with samples. |
+| `web` | Open a visualized graph in the web browser (requires Graphviz). |
+| `o` | Show current option settings (sort, sample_index, etc.). |
+
+**Q: Error: `failed to execute dot. Is Graphviz installed?`**
+**A:** `pprof` visualization (`web`, `pdf`, `png`) requires **Graphviz**.
+**Fix (Mac):** Install it via Homebrew:
+```bash
+brew install graphviz
+```
