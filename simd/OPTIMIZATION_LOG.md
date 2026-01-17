@@ -41,6 +41,19 @@ We analyzed the **Total Allocated Bytes** (via `-alloc_space`) to see the true m
 
 ---
 
+## 🧪 Robustness & Stress Testing
+
+We verified correctness and performance on challenging payloads.
+
+| Scenario | FastParser Time | fastjson Time | StdLib Time | Note |
+|:---|:---:|:---:|:---:|:---|
+| **Deep Nesting** (1000 levels) | **29.3 µs** | 21.0 µs | 157.3 µs | fastjson is faster (recursive optimization). |
+| **Float Array** (1000 floats) | **23.7 µs** | 12.1 µs | 105.3 µs | fastjson wins on raw number scanning. |
+
+**Correctness**: Verified against `encoding/json` output for escaped strings, unicodes, and nested structures.
+
+---
+
 ## 🛠️ Key Optimization Techniques
 
 ### 1. Memory Arena & Inline Allocation

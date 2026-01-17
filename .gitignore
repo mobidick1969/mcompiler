@@ -2,3 +2,6 @@
 # Test binaries and profiles
 *.test
 *.prof
+
+# Dependencies
+vendor/

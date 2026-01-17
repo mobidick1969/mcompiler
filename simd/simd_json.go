@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/bits"
 	"mcompiler/arena"
+	"strconv"
 	"unsafe"
 )
 
@@ -30,6 +31,17 @@ type Node struct {
 	Children *Node
 	Next     *Node
 	Type     NodeType
+}
+
+// Unescape returns the unescaped string value for String nodes.
+// For other types, it returns ValueStr raw.
+func (n *Node) Unescape() (string, error) {
+	if n.Type != String {
+		return n.ValueStr, nil
+	}
+	// FastParser stores raw content (without surrounding quotes).
+	// strconv.Unquote expects surrounding quotes.
+	return strconv.Unquote("\"" + n.ValueStr + "\"")
 }
 
 type Parser struct {
@@ -282,7 +294,7 @@ func (p *Parser) scanNumber() string {
 }
 
 func isNumChar(c byte) bool {
-	return c == '-' || (c >= '0' && c <= '9')
+	return (c >= '0' && c <= '9') || c == '.' || c == '-' || c == '+' || c == 'e' || c == 'E'
 }
 
 func (p *Parser) match(target string) bool {
