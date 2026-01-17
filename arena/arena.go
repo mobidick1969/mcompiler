@@ -111,10 +111,7 @@ func Alloc[T any](a *BestArena) *T {
 }
 
 func (a *BestArena) grow(requiredSize int) {
-	newSize := len(a.Current.Data) * 2
-	if requiredSize > newSize {
-		newSize = requiredSize
-	}
+	newSize := max(requiredSize, len(a.Current.Data)*2)
 
 	if a.Current.Next != nil {
 		if len(a.Current.Next.Data) >= newSize {

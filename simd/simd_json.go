@@ -293,6 +293,25 @@ func (p *Parser) scanNumber() string {
 	return view
 }
 
+func (p *Parser) scanNumberLinear() string {
+	start := p.cursor
+
+	for p.cursor < len(p.input) {
+		c := p.input[p.cursor]
+		if isNumChar(c) {
+			p.cursor++
+		} else {
+			break
+		}
+	}
+
+	len := p.cursor - start
+	basePtr := unsafe.SliceData(p.input)
+	strStartPtr := unsafe.Add(unsafe.Pointer(basePtr), start)
+	view := unsafe.String((*byte)(strStartPtr), len)
+	return view
+}
+
 func isNumChar(c byte) bool {
 	return (c >= '0' && c <= '9') || c == '.' || c == '-' || c == '+' || c == 'e' || c == 'E'
 }
