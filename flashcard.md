@@ -104,3 +104,13 @@ GODEBUG=gctrace=1 go test -bench=GC_Pressure
 *   This indicates how much CPU time was spent on GC work for that cycle.
 *   Note: `go test` does not have a flag to simply add a "GC Time" column to the benchmark output table.
 
+## 🏗️ Parser Design
+
+**Q: What is a Pratt Parser (Top-Down Operator Precedence Parser)?**
+**A:** A parsing algorithm ideal for expressions with varying precedence and associativity. Unlike standard recursive descent which requires a function for each grammar rule (Term, Factor, etc.), Pratt Parsing uses a single `parseExpression(precedence)` function. It works by associating "Parsing Functions" (Prefix/Infix) and "Precedence" values with token types. The parser consumes tokens as long as the next token has a higher precedence than the current context.
+
+**Q: What are the key components of a Pratt Parser?**
+**A:**
+1.  **Prefix Parse Functions (`nud` - Null Denotation):** Handle tokens at the start of an expression (e.g., `-` in `-5`, `!` in `!true`, or integers).
+2.  **Infix Parse Functions (`led` - Left Denotation):** Handle tokens sitting between expressions (e.g., `+` in `1 + 2`).
+3.  **Precedence values:** Integers determining binding power (e.g., `*` > `+`).
